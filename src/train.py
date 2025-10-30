@@ -92,12 +92,16 @@ def get_transforms(img_size=224, train=True):
     Args:
         img_size: Target image size (ViT typically uses 224x224)
         train: If True, include data augmentation
+    
+    Note:
+        For training, augmentation is performed on 32x32 before resizing to preserve
+        the relative scale of augmentation (padding=4 on 32x32 = 12.5% range).
     """
     if train:
         return transforms.Compose([
-            transforms.Resize((img_size, img_size)),
+            transforms.RandomCrop(32, padding=4),        # Augment at original size
             transforms.RandomHorizontalFlip(p=0.5),
-            transforms.RandomCrop(img_size, padding=4),
+            transforms.Resize((img_size, img_size)),     # Then resize to target
             transforms.Normalize(
                 mean=[0.4914, 0.4822, 0.4465],  # CIFAR-10 mean
                 std=[0.2470, 0.2435, 0.2616]    # CIFAR-10 std
