@@ -211,7 +211,6 @@ class TrainingHistory:
         self.timestamps.append(datetime.now().isoformat())
     
     def save(self, filepath):
-        """保存训练历史到文件"""
         history = {
             'epochs': self.epochs,
             'train_losses': self.train_losses,
@@ -225,7 +224,6 @@ class TrainingHistory:
             json.dump(history, f, indent=2)
     
     def load(self, filepath):
-        """从文件加载训练历史"""
         with open(filepath, 'r') as f:
             history = json.load(f)
         self.epochs = history['epochs']
