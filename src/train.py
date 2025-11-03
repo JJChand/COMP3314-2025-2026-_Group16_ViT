@@ -10,7 +10,9 @@ import argparse
 from pathlib import Path
 
 from model import VisionTransformer, vit_tiny_patch16_224, vit_small_patch16_224
-
+import json
+import pandas as pd
+from datetime import datetime
 
 def unpickle(file):
     """Load CIFAR-10 batch file."""
@@ -188,6 +190,51 @@ def validate(model, val_loader, criterion, device, epoch):
     
     return epoch_loss, epoch_acc
 
+class TrainingHistory: 
+    
+    def __init__(self):
+        self.epochs = []
+        self.train_losses = []
+        self.train_accs = []
+        self.val_losses = []
+        self.val_accs = []
+        self.learning_rates = []
+        self.timestamps = []
+    
+    def add_epoch(self, epoch, train_loss, train_acc, val_loss, val_acc, lr):
+        self.epochs.append(epoch)
+        self.train_losses.append(train_loss)
+        self.train_accs.append(train_acc)
+        self.val_losses.append(val_loss)
+        self.val_accs.append(val_acc)
+        self.learning_rates.append(lr)
+        self.timestamps.append(datetime.now().isoformat())
+    
+    def save(self, filepath):
+        """保存训练历史到文件"""
+        history = {
+            'epochs': self.epochs,
+            'train_losses': self.train_losses,
+            'train_accs': self.train_accs,
+            'val_losses': self.val_losses,
+            'val_accs': self.val_accs,
+            'learning_rates': self.learning_rates,
+            'timestamps': self.timestamps
+        }
+        with open(filepath, 'w') as f:
+            json.dump(history, f, indent=2)
+    
+    def load(self, filepath):
+        """从文件加载训练历史"""
+        with open(filepath, 'r') as f:
+            history = json.load(f)
+        self.epochs = history['epochs']
+        self.train_losses = history['train_losses']
+        self.train_accs = history['train_accs']
+        self.val_losses = history['val_losses']
+        self.val_accs = history['val_accs']
+        self.learning_rates = history['learning_rates']
+        self.timestamps = history['timestamps']
 
 def main(args):
     # Set device
