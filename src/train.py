@@ -233,6 +233,18 @@ class TrainingHistory:
         self.val_accs = history['val_accs']
         self.learning_rates = history['learning_rates']
         self.timestamps = history['timestamps']
+     
+    def get_summary(self):
+        if not self.epochs:
+            return'No recorded history.'
+        
+        return {
+            'total_epochs': len(self.epochs),
+            'best_val_accuracy': max(self.val_accs) if self.val_accs else 0,
+            'final_train_accuracy': self.train_accs[-1] if self.train_accs else 0,
+            'final_val_accuracy': self.val_accs[-1] if self.val_accs else 0,
+            'overfitting_gap': (self.train_accs[-1] - self.val_accs[-1]) if self.train_accs and self.val_accs else 0
+        }
 
 def main(args):
     # Set device
@@ -322,6 +334,8 @@ def main(args):
         )
     else:
         scheduler = None
+
+    history = TrainingHistory()
     
     # Training loop
     best_acc = 0.0
@@ -339,6 +353,12 @@ def main(args):
             model, val_loader, criterion, device, epoch
         )
         
+        # 记录当前学习率
+        current_lr = optimizer.param_groups[0]['lr']
+        
+        # 添加到历史记录
+        history.add_epoch(epoch, train_loss, train_acc, val_loss, val_acc, current_lr)
+       
         # Update learning rate
         if scheduler:
             scheduler.step()
@@ -361,11 +381,21 @@ def main(args):
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_acc': best_acc,
                 'args': args
+                'training_history': {  # 在检查点中保存历史
+                    'epochs': history.epochs,
+                    'train_losses': history.train_losses,
+                    'train_accs': history.train_accs,
+                    'val_losses': history.val_losses,
+                    'val_accs': history.val_accs,
+                    'learning_rates': history.learning_rates
+                }
             }
             
             save_path = os.path.join(args.save_dir, 'best_model.pth')
             os.makedirs(args.save_dir, exist_ok=True)
             torch.save(checkpoint, save_path)
+             # 同时保存训练历史到JSON文件
+            history.save(os.path.join(args.save_dir, 'training_history.json'))
         
         # Save periodic checkpoint
         if epoch % args.save_freq == 0:
@@ -375,17 +405,28 @@ def main(args):
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_acc': best_acc,
                 'args': args
+                'training_history': {  # 在定期检查点中也保存历史
+                    'epochs': history.epochs,
+                    'train_losses': history.train_losses,
+                    'train_accs': history.train_accs,
+                    'val_losses': history.val_losses,
+                    'val_accs': history.val_accs,
+                    'learning_rates': history.learning_rates
+                }
             }
             
             save_path = os.path.join(args.save_dir, f'checkpoint_epoch_{epoch}.pth')
             os.makedirs(args.save_dir, exist_ok=True)
             torch.save(checkpoint, save_path)
             print(f"  Saved checkpoint: {save_path}")
+    # 训练结束后保存完整历史
+    history.save(os.path.join(args.save_dir, 'final_training_history.json'))
     
     print("\n" + "=" * 80)
     print(f"Training completed! Best validation accuracy: {best_acc:.2f}%")
     print("=" * 80)
 
+return history  # 返回历史记录对象
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Vision Transformer on CIFAR-10')
@@ -434,4 +475,3 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
-    main(args)
