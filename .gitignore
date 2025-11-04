@@ -28,8 +28,10 @@ venv/
 # OS
 .DS_Store
 
+# 3rd party data and models
+cifar-10-python/
 /cifar-10
-/src/checkpoints
 /cifar-100
-best_model.pth
 102flowers.tgz
+*.pth
+/src/checkpoints
