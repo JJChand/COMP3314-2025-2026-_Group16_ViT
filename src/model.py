@@ -148,19 +148,22 @@ class VisionTransformer(nn.Module):
         self._init_weights()
     
     def _init_weights(self):
+        # Patch embedding projection
         w = self.patch_embed.projection.weight.data
         nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
         
-        nn.init.normal_(self.cls_token, std=0.02)
-        nn.init.normal_(self.pos_embed, std=0.02)
+        # CLS token and position embeddings - use truncated normal (paper requirement)
+        nn.init.trunc_normal_(self.cls_token, std=0.02)
+        nn.init.trunc_normal_(self.pos_embed, std=0.02)
         
+        # Transformer blocks - use truncated normal instead of xavier (paper requirement)
         for m in self.modules():
             if isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
+                nn.init.trunc_normal_(m.weight, std=0.02)
                 if m.bias is not None:
                     nn.init.constant_(m.bias, 0)
             elif isinstance(m, nn.LayerNorm):
-                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.weight, 1.0)
                 nn.init.constant_(m.bias, 0)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:

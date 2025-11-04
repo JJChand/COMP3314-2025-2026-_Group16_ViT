@@ -12,6 +12,40 @@ from model import VisionTransformer, vit_tiny_patch16_224, vit_small_patch16_224
 import json
 from datetime import datetime
 
+
+class WarmupCosineSchedule:
+    """
+    Learning rate scheduler with warmup and cosine annealing.
+    Critical for ViT training - from original paper.
+    """
+    
+    def __init__(self, optimizer, warmup_steps, total_steps, min_lr=1e-6):
+        self.optimizer = optimizer
+        self.warmup_steps = warmup_steps
+        self.total_steps = total_steps
+        self.min_lr = min_lr
+        self.base_lr = optimizer.param_groups[0]['lr']
+        self.current_step = 0
+        
+    def step(self):
+        self.current_step += 1
+        
+        if self.current_step < self.warmup_steps:
+            # Linear warmup
+            lr = self.base_lr * self.current_step / self.warmup_steps
+        else:
+            # Cosine annealing after warmup
+            progress = (self.current_step - self.warmup_steps) / (self.total_steps - self.warmup_steps)
+            lr = self.min_lr + (self.base_lr - self.min_lr) * 0.5 * (1.0 + np.cos(np.pi * progress))
+        
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
+        
+        return lr
+    
+    def get_last_lr(self):
+        return [param_group['lr'] for param_group in self.optimizer.param_groups]
+
 def unpickle(file):
     """Load CIFAR-100 batch file."""
     import pickle
@@ -93,18 +127,23 @@ def get_transforms(img_size=224, train=True):
         train: If True, include data augmentation
     
     Note:
-        For training, augmentation is performed on 32x32 before resizing to preserve
-        the relative scale of augmentation (padding=4 on 32x32 = 12.5% range).
+        Enhanced augmentation based on ViT paper recommendations:
+        - RandAugment for better regularization
+        - Random Erasing (Cutout) for robustness
     """
     if train:
         return transforms.Compose([
             transforms.RandomCrop(32, padding=4),        # Augment at original size
             transforms.RandomHorizontalFlip(p=0.5),
+            # Paper recommendation: RandAugment for better augmentation
+            transforms.RandAugment(num_ops=2, magnitude=9),
             transforms.Resize((img_size, img_size)),     # Then resize to target
             transforms.Normalize(
                 mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],  # CIFAR-100 mean
                 std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404]    # CIFAR-100 std
             ),
+            # Paper recommendation: Random Erasing (Cutout)
+            transforms.RandomErasing(p=0.25, scale=(0.02, 0.33)),
         ])
     else:
         return transforms.Compose([
@@ -116,8 +155,8 @@ def get_transforms(img_size=224, train=True):
         ])
 
 
-def train_one_epoch(model, train_loader, criterion, optimizer, device, epoch):
-    """Train for one epoch."""
+def train_one_epoch(model, train_loader, criterion, optimizer, device, epoch, scheduler=None, grad_clip=1.0):
+    """Train for one epoch with gradient clipping and per-step scheduler."""
     model.train()
     running_loss = 0.0
     correct = 0
@@ -132,9 +171,14 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, epoch):
         outputs = model(images)
         loss = criterion(outputs, labels)
         
-        # Backward pass
+        # Backward pass with gradient clipping (paper requirement)
         loss.backward()
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip)
         optimizer.step()
+        
+        # Update scheduler per step (for warmup)
+        if scheduler is not None:
+            scheduler.step()
         
         # Statistics
         running_loss += loss.item()
@@ -143,9 +187,11 @@ def train_one_epoch(model, train_loader, criterion, optimizer, device, epoch):
         correct += predicted.eq(labels).sum().item()
         
         # Update progress bar
+        current_lr = optimizer.param_groups[0]['lr']
         pbar.set_postfix({
             'loss': running_loss / (batch_idx + 1),
-            'acc': 100. * correct / total
+            'acc': 100. * correct / total,
+            'lr': f'{current_lr:.6f}'
         })
     
     epoch_loss = running_loss / len(train_loader)
@@ -317,8 +363,25 @@ def main(args):
         weight_decay=args.weight_decay
     )
     
-    # Learning rate scheduler
-    if args.scheduler == 'cosine':
+    # Learning rate scheduler with warmup (paper requirement)
+    total_steps = len(train_loader) * args.epochs
+    warmup_steps = args.warmup_epochs * len(train_loader)
+    
+    print(f"\nScheduler settings:")
+    print(f"  Total steps: {total_steps}")
+    print(f"  Warmup steps: {warmup_steps} ({args.warmup_epochs} epochs)")
+    print(f"  Base LR: {args.lr}")
+    print(f"  Gradient clipping: {args.grad_clip}")
+    
+    if args.scheduler == 'warmup_cosine':
+        # Use warmup + cosine annealing (paper recommendation)
+        scheduler = WarmupCosineSchedule(
+            optimizer,
+            warmup_steps=warmup_steps,
+            total_steps=total_steps,
+            min_lr=1e-6
+        )
+    elif args.scheduler == 'cosine':
         scheduler = optim.lr_scheduler.CosineAnnealingLR(
             optimizer, 
             T_max=args.epochs
@@ -340,9 +403,11 @@ def main(args):
     print("=" * 80)
     
     for epoch in range(1, args.epochs + 1):
-        # Train
+        # Train with scheduler and gradient clipping
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, device, epoch
+            model, train_loader, criterion, optimizer, device, epoch,
+            scheduler=scheduler if args.scheduler == 'warmup_cosine' else None,
+            grad_clip=args.grad_clip
         )
         
         # Validate
@@ -356,8 +421,8 @@ def main(args):
         # 添加到历史记录
         history.add_epoch(epoch, train_loss, train_acc, val_loss, val_acc, current_lr)
        
-        # Update learning rate
-        if scheduler:
+        # Update learning rate (only for epoch-based schedulers, warmup_cosine updates per step)
+        if scheduler and args.scheduler != 'warmup_cosine':
             scheduler.step()
         
         # Print epoch summary
@@ -449,18 +514,22 @@ if __name__ == '__main__':
     parser.add_argument('--dropout', type=float, default=0.1,
                         help='Dropout rate (default: 0.1)')
     
-    # Training parameters
-    parser.add_argument('--epochs', type=int, default=100,
-                        help='Number of training epochs (default: 100)')
+    # Training parameters (updated based on ViT paper for CIFAR-10)
+    parser.add_argument('--epochs', type=int, default=300,
+                        help='Number of training epochs (default: 300, paper uses 300-1000)')
     parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size (default: 128)')
-    parser.add_argument('--lr', type=float, default=3e-4,
-                        help='Learning rate (default: 3e-4)')
-    parser.add_argument('--weight_decay', type=float, default=0.05,
-                        help='Weight decay (default: 0.05)')
-    parser.add_argument('--scheduler', type=str, default='cosine',
-                        choices=['cosine', 'step', 'none'],
-                        help='Learning rate scheduler (default: cosine)')
+    parser.add_argument('--lr', type=float, default=3e-3,
+                        help='Learning rate (default: 3e-3, paper recommendation for CIFAR-10)')
+    parser.add_argument('--weight_decay', type=float, default=0.1,
+                        help='Weight decay (default: 0.1, paper uses 0.1)')
+    parser.add_argument('--scheduler', type=str, default='warmup_cosine',
+                        choices=['warmup_cosine', 'cosine', 'step', 'none'],
+                        help='Learning rate scheduler (default: warmup_cosine)')
+    parser.add_argument('--warmup_epochs', type=int, default=10,
+                        help='Number of warmup epochs (default: 10, paper recommendation)')
+    parser.add_argument('--grad_clip', type=float, default=1.0,
+                        help='Gradient clipping max norm (default: 1.0, paper uses 1.0)')
     
     # Other parameters
     parser.add_argument('--num_workers', type=int, default=0,
