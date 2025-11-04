@@ -7,34 +7,32 @@ import numpy as np
 import os
 from tqdm import tqdm
 import argparse
-from pathlib import Path
 
 from model import VisionTransformer, vit_tiny_patch16_224, vit_small_patch16_224
 import json
-import pandas as pd
 from datetime import datetime
 
 def unpickle(file):
-    """Load CIFAR-10 batch file."""
+    """Load CIFAR-100 batch file."""
     import pickle
     with open(file, 'rb') as fo:
-        dict = pickle.load(fo, encoding='bytes')
-    return dict
+        dicts = pickle.load(fo, encoding='bytes')
+    return dicts
 
 
-class CIFAR10Dataset(Dataset):
+class CIFAR100Dataset(Dataset):
     """
-    Custom CIFAR-10 Dataset that loads from pickle files.
+    Custom CIFAR-100 Dataset that loads from pickle files.
     
     Dataset format:
     - data: 10000x3072 array (32x32x3 images, row-major order)
-    - labels: list of 10000 integers (0-9)
+    - labels: list of 10000 integers (0-99)
     """
     
     def __init__(self, data_dir, train=True, transform=None):
         """
         Args:
-            data_dir: Path to CIFAR-10 data directory
+            data_dir: Path to CIFAR-100 data directory
             train: If True, load training batches; if False, load test batch
             transform: Optional transform to apply to images
         """
@@ -45,22 +43,21 @@ class CIFAR10Dataset(Dataset):
         # Load data and labels
         self.data = []
         self.labels = []
-        
+        7
+
+
         if train:
-            # Load all 5 training batches
-            for i in range(1, 6):
-                batch_file = os.path.join(data_dir, f'data_batch_{i}')
-                batch_dict = unpickle(batch_file)
-                self.data.append(batch_dict[b'data'])
-                self.labels.extend(batch_dict[b'labels'])
-            
+            batch_file = os.path.join(data_dir, 'train')
+            batch_dict = unpickle(batch_file)
+            self.data.append(batch_dict[b'data'])
+            self.labels.extend(batch_dict[b'fine_labels'])
             self.data = np.vstack(self.data)  # Shape: (50000, 3072)
         else:
             # Load test batch
-            test_file = os.path.join(data_dir, 'test_batch')
+            test_file = os.path.join(data_dir, 'test')
             test_dict = unpickle(test_file)
             self.data = test_dict[b'data']  # Shape: (10000, 3072)
-            self.labels = test_dict[b'labels']
+            self.labels = test_dict[b'fine_labels']
         
         # Reshape data from (N, 3072) to (N, 3, 32, 32)
         self.data = self.data.reshape(-1, 3, 32, 32)
@@ -68,9 +65,9 @@ class CIFAR10Dataset(Dataset):
         self.data = self.data.astype(np.float32) / 255.0
         
         # Load label names
-        meta_file = os.path.join(data_dir, 'batches.meta')
+        meta_file = os.path.join(data_dir, 'meta')
         meta_dict = unpickle(meta_file)
-        self.label_names = [name.decode('utf-8') for name in meta_dict[b'label_names']]
+        self.label_names = [name.decode('utf-8') for name in meta_dict[b'fine_label_names']]
         
         print(f"Loaded {'training' if train else 'test'} data: {len(self.data)} images")
     
@@ -89,7 +86,7 @@ class CIFAR10Dataset(Dataset):
 
 def get_transforms(img_size=224, train=True):
     """
-    Get data transforms for CIFAR-10.
+    Get data transforms for CIFAR-100.
     
     Args:
         img_size: Target image size (ViT typically uses 224x224)
@@ -105,16 +102,16 @@ def get_transforms(img_size=224, train=True):
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.Resize((img_size, img_size)),     # Then resize to target
             transforms.Normalize(
-                mean=[0.4914, 0.4822, 0.4465],  # CIFAR-10 mean
-                std=[0.2470, 0.2435, 0.2616]    # CIFAR-10 std
+                mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],  # CIFAR-100 mean
+                std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404]    # CIFAR-100 std
             ),
         ])
     else:
         return transforms.Compose([
             transforms.Resize((img_size, img_size)),
             transforms.Normalize(
-                mean=[0.4914, 0.4822, 0.4465],
-                std=[0.2470, 0.2435, 0.2616]
+                mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
+                std=[0.2673342858792401, 0.2564384629170883, 0.27615047132568404]
             ),
         ])
 
@@ -253,12 +250,12 @@ def main(args):
     
     # Create datasets
     print(f"\nLoading data from: {args.data_dir}")
-    train_dataset = CIFAR10Dataset(
+    train_dataset = CIFAR100Dataset(
         args.data_dir, 
         train=True, 
         transform=get_transforms(args.img_size, train=True)
     )
-    val_dataset = CIFAR10Dataset(
+    val_dataset = CIFAR100Dataset(
         args.data_dir, 
         train=False, 
         transform=get_transforms(args.img_size, train=False)
@@ -284,16 +281,16 @@ def main(args):
     # Create model
     print(f"\nCreating ViT model: {args.model}")
     if args.model == 'tiny':
-        model = vit_tiny_patch16_224(num_classes=10)
+        model = vit_tiny_patch16_224(num_classes=100)
     elif args.model == 'small':
-        model = vit_small_patch16_224(num_classes=10)
+        model = vit_small_patch16_224(num_classes=100)
     elif args.model == 'custom':
         # Custom ViT for smaller images
         model = VisionTransformer(
             img_size=args.img_size,
             patch_size=args.patch_size,
             in_channels=3,
-            num_classes=10,
+            num_classes=100,
             embed_dim=args.embed_dim,
             depth=args.depth,
             num_heads=args.num_heads,
@@ -380,7 +377,7 @@ def main(args):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_acc': best_acc,
-                'args': args
+                'args': args,
                 'training_history': {  # 在检查点中保存历史
                     'epochs': history.epochs,
                     'train_losses': history.train_losses,
@@ -404,7 +401,7 @@ def main(args):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_acc': best_acc,
-                'args': args
+                'args': args,
                 'training_history': {  # 在定期检查点中也保存历史
                     'epochs': history.epochs,
                     'train_losses': history.train_losses,
@@ -426,14 +423,14 @@ def main(args):
     print(f"Training completed! Best validation accuracy: {best_acc:.2f}%")
     print("=" * 80)
 
-return history  # 返回历史记录对象
+    return history  # 返回历史记录对象
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Train Vision Transformer on CIFAR-10')
+    parser = argparse.ArgumentParser(description='Train Vision Transformer on CIFAR-100')
     
     # Data parameters
-    parser.add_argument('--data_dir', type=str, default='../cifar-10-batches-py',
-                        help='Path to CIFAR-10 data directory (default: ../cifar-10-batches-py)')
+    parser.add_argument('--data_dir', type=str, default='../cifar-100',
+                        help='Path to CIFAR-100 data directory (default: ../cifar-100)')
     parser.add_argument('--img_size', type=int, default=224,
                         help='Input image size (default: 224)')
     
@@ -475,3 +472,4 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     
+    main(args)
