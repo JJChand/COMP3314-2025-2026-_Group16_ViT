@@ -95,8 +95,8 @@ class CIFAR100Dataset(Dataset):
         
         # Reshape data from (N, 3072) to (N, 3, 32, 32)
         self.data = self.data.reshape(-1, 3, 32, 32)
-        # Convert from [0, 255] to [0, 1]
-        self.data = self.data.astype(np.float32) / 255.0
+        # Keep as uint8 for RandAugment (don't convert to float yet!)
+        # Transforms will handle the conversion later
         
         # Load label names
         meta_file = os.path.join(data_dir, 'meta')
@@ -109,7 +109,8 @@ class CIFAR100Dataset(Dataset):
         return len(self.data)
     
     def __getitem__(self, idx):
-        image = torch.from_numpy(self.data[idx])  # Shape: (3, 32, 32)
+        # Get image as uint8 for RandAugment compatibility
+        image = torch.from_numpy(self.data[idx].copy())  # Shape: (3, 32, 32), uint8
         label = self.labels[idx]
         
         if self.transform:
@@ -137,6 +138,8 @@ def get_transforms(img_size=224, train=True):
             transforms.RandomHorizontalFlip(p=0.5),
             # Paper recommendation: RandAugment for better augmentation
             transforms.RandAugment(num_ops=2, magnitude=9),
+            # Convert to float [0, 1] after augmentation
+            transforms.ConvertImageDtype(torch.float32),
             transforms.Resize((img_size, img_size)),     # Then resize to target
             transforms.Normalize(
                 mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],  # CIFAR-100 mean
@@ -147,6 +150,8 @@ def get_transforms(img_size=224, train=True):
         ])
     else:
         return transforms.Compose([
+            # Convert to float [0, 1] for consistency
+            transforms.ConvertImageDtype(torch.float32),
             transforms.Resize((img_size, img_size)),
             transforms.Normalize(
                 mean=[0.5070751592371323, 0.48654887331495095, 0.4409178433670343],
@@ -494,15 +499,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Vision Transformer on CIFAR-100')
     
     # Data parameters
-    parser.add_argument('--data_dir', type=str, default='../cifar-100',
-                        help='Path to CIFAR-100 data directory (default: ../cifar-100)')
+    parser.add_argument('--data_dir', type=str, default='../cifar-100-python/cifar-100-python',
+                        help='Path to CIFAR-100 data directory (default: ../cifar-100-python/cifar-100-python)')
     parser.add_argument('--img_size', type=int, default=224,
                         help='Input image size (default: 224)')
     
-    # Model parameters
-    parser.add_argument('--model', type=str, default='tiny',
+    # Model parameters (use 'small' for CIFAR-100 due to 100 classes)
+    parser.add_argument('--model', type=str, default='small',
                         choices=['tiny', 'small', 'custom'],
-                        help='Model variant (default: tiny)')
+                        help='Model variant (default: small for CIFAR-100)')
     parser.add_argument('--patch_size', type=int, default=16,
                         help='Patch size for custom model (default: 16)')
     parser.add_argument('--embed_dim', type=int, default=192,
