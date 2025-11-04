@@ -8,7 +8,7 @@ import json
 from train import TrainingHistory
 
 class ViTVisualizer:
-    """ViT模型可视化类 - 适配新的TrainingHistory格式"""
+
     
     def __init__(self, checkpoint_dir='./checkpoints'):
         self.checkpoint_dir = checkpoint_dir
