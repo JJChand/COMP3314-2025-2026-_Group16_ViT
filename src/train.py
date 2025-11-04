@@ -380,7 +380,7 @@ def main(args):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_acc': best_acc,
-                'args': args
+                'args': args,
                 'training_history': {  # 在检查点中保存历史
                     'epochs': history.epochs,
                     'train_losses': history.train_losses,
@@ -404,7 +404,7 @@ def main(args):
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'best_acc': best_acc,
-                'args': args
+                'args': args,
                 'training_history': {  # 在定期检查点中也保存历史
                     'epochs': history.epochs,
                     'train_losses': history.train_losses,
@@ -426,7 +426,7 @@ def main(args):
     print(f"Training completed! Best validation accuracy: {best_acc:.2f}%")
     print("=" * 80)
 
-return history  # 返回历史记录对象
+    return history  # 返回历史记录对象
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Train Vision Transformer on CIFAR-10')
