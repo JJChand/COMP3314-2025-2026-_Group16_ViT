@@ -1,4 +1,3 @@
-import os, math, time
 from pathlib import Path
 
 import torch
@@ -8,7 +7,7 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms, models
 from train import train_one_epoch, validate
-from model import vit_tiny_patch16_224
+from model import vit_small_patch16_224
 
 IMG_SIZE = 224
 CIFAR10_MEAN = (0.4914, 0.4822, 0.4465)
@@ -41,8 +40,8 @@ test_loader  = DataLoader(test_set,  batch_size=BATCH_SIZE, shuffle=False,
                           num_workers=NUM_WORKERS, pin_memory=True)
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-trained_model = vit_tiny_patch16_224(num_classes=100)
-checkpoint = torch.load('checkpoints/best_model.pth', map_location=DEVICE, weights_only=False)
+trained_model = vit_small_patch16_224(num_classes=100)
+checkpoint = torch.load('checkpoints/best_model_new.pth', map_location=DEVICE, weights_only=False)
 trained_model.load_state_dict(checkpoint['model_state_dict'])
 in_features = trained_model.head.in_features
 trained_model.head = nn.Linear(in_features, 10)
@@ -62,7 +61,7 @@ for name, p in trained_model.named_parameters():
     if hasattr(trained_model, "classifier"):
         for p in trained_model.classifier.parameters(): p.requires_grad = True
 
-EPOCHS = 20
+EPOCHS = 100
 BASE_LR = 1e-3
 WEIGHT_DECAY = 5e-4
 
@@ -76,19 +75,20 @@ scheduler = CosineAnnealingLR(optimizer, T_max=EPOCHS)
 best_acc = 0.0
 save_path = Path("checkpoints/cifar10_finetuned.pth")
 
-for epoch in range(1, EPOCHS+1):
-    print(f"Epoch {epoch}/{EPOCHS}")
-    tr_loss, tr_acc = train_one_epoch(trained_model, train_loader, criterion, optimizer, DEVICE, epoch)
-    va_loss, va_acc = validate(trained_model, test_loader, criterion, DEVICE, epoch)
-    scheduler.step()
+if __name__ == '__main__':
+    for epoch in range(1, EPOCHS + 1):
+        print(f"Epoch {epoch}/{EPOCHS}")
+        tr_loss, tr_acc = train_one_epoch(trained_model, train_loader, criterion, optimizer, DEVICE, epoch)
+        va_loss, va_acc = validate(trained_model, test_loader, criterion, DEVICE, epoch)
+        scheduler.step()
 
-    if va_acc > best_acc:
-        best_acc = va_acc
-        torch.save(trained_model.state_dict(), save_path)
+        if va_acc > best_acc:
+            best_acc = va_acc
+            torch.save(trained_model.state_dict(), save_path)
 
-    print(f"Epoch {epoch:02d}/{EPOCHS}  "
-          f"train: loss {tr_loss:.4f} acc {tr_acc*100:.2f}% | "
-          f"val: loss {va_loss:.4f} acc {va_acc*100:.2f}%  "
-          f"(best {best_acc*100:.2f}%)")
+        print(f"Epoch {epoch:02d}/{EPOCHS}  "
+              f"train: loss {tr_loss:.4f} acc {tr_acc :.2f}% | "
+              f"val: loss {va_loss:.4f} acc {va_acc :.2f}%  "
+              f"(best {best_acc :.2f}%)")
 
-print(f"Best checkpoint saved to: {save_path}")
+    print(f"Best checkpoint saved to: {save_path}")
