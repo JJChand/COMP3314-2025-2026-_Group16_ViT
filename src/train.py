@@ -524,8 +524,8 @@ if __name__ == '__main__':
                         help='Number of training epochs (default: 300, paper uses 300-1000)')
     parser.add_argument('--batch_size', type=int, default=128,
                         help='Batch size (default: 128)')
-    parser.add_argument('--lr', type=float, default=3e-3,
-                        help='Learning rate (default: 3e-3, paper recommendation for CIFAR-10)')
+    parser.add_argument('--lr', type=float, default=1e-3,
+                        help='Learning rate (default: 1e-3, adjusted for CIFAR-100 from scratch)')
     parser.add_argument('--weight_decay', type=float, default=0.1,
                         help='Weight decay (default: 0.1, paper uses 0.1)')
     parser.add_argument('--scheduler', type=str, default='warmup_cosine',
