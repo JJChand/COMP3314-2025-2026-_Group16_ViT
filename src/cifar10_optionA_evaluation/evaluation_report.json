@@ -1,0 +1,19 @@
+{
+  "model_type": "ViT-Small",
+  "total_parameters": 21669514,
+  "overall_accuracy": 63.660000000000004,
+  "top5_accuracy": 96.75,
+  "per_class_accuracy": {
+    "airplane": 68.9,
+    "automobile": 73.3,
+    "bird": 56.0,
+    "cat": 34.5,
+    "deer": 56.2,
+    "dog": 65.2,
+    "frog": 72.5,
+    "horse": 67.4,
+    "ship": 72.9,
+    "truck": 69.7
+  },
+  "evaluation_date": "2025-11-08 21:00:27"
+}

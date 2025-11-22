@@ -12,13 +12,32 @@ import matplotlib.pyplot as plt
 from typing import Dict, List, Tuple
 
 from model import VisionTransformer, vit_tiny_patch16_224, vit_small_patch16_224
-from train import CIFAR10Dataset, get_transforms
+from train import CIFAR100Dataset, get_transforms
 
 
 # CIFAR-10 class names
 CIFAR10_CLASSES = [
     'airplane', 'automobile', 'bird', 'cat', 'deer',
     'dog', 'frog', 'horse', 'ship', 'truck'
+]
+
+# CIFAR-100 class names
+CIFAR100_CLASSES = [
+    'apple', 'aquarium_fish', 'baby', 'bear', 'beaver', 'bed', 'bee', 'beetle', 
+    'bicycle', 'bottle', 'bowl', 'boy', 'bridge', 'bus', 'butterfly', 'camel', 
+    'can', 'castle', 'caterpillar', 'cattle', 'chair', 'chimpanzee', 'clock', 
+    'cloud', 'cockroach', 'couch', 'crab', 'crocodile', 'cup', 'dinosaur', 
+    'dolphin', 'elephant', 'flatfish', 'forest', 'fox', 'girl', 'hamster', 
+    'house', 'kangaroo', 'keyboard', 'lamp', 'lawn_mower', 'leopard', 'lion',
+    'lizard', 'lobster', 'man', 'maple_tree', 'motorcycle', 'mountain', 'mouse',
+    'mushroom', 'oak_tree', 'orange', 'orchid', 'otter', 'palm_tree', 'pear',
+    'pickup_truck', 'pine_tree', 'plain', 'plate', 'poppy', 'porcupine',
+    'possum', 'rabbit', 'raccoon', 'ray', 'road', 'rocket', 'rose',
+    'sea', 'seal', 'shark', 'shrew', 'skunk', 'skyscraper', 'snail', 'snake',
+    'spider', 'squirrel', 'streetcar', 'sunflower', 'sweet_pepper', 'table',
+    'tank', 'telephone', 'television', 'tiger', 'tractor', 'train', 'trout',
+    'tulip', 'turtle', 'wardrobe', 'whale', 'willow_tree', 'wolf', 'woman',
+    'worm'
 ]
 
 
@@ -44,9 +63,9 @@ def load_model(checkpoint_path: str, device: str = 'cpu') -> Tuple[VisionTransfo
     
     # Create model based on saved configuration
     if args.model == 'tiny':
-        model = vit_tiny_patch16_224(num_classes=10)
+        model = vit_tiny_patch16_224(num_classes=100)
     elif args.model == 'small':
-        model = vit_small_patch16_224(num_classes=10)
+        model = vit_small_patch16_224(num_classes=100)
     else:
         # Custom model
         model = VisionTransformer(
@@ -55,7 +74,7 @@ def load_model(checkpoint_path: str, device: str = 'cpu') -> Tuple[VisionTransfo
             embed_dim=args.embed_dim,
             depth=args.depth,
             num_heads=args.num_heads,
-            num_classes=10,
+            num_classes=100,
             dropout=args.dropout
         )
     
@@ -64,7 +83,7 @@ def load_model(checkpoint_path: str, device: str = 'cpu') -> Tuple[VisionTransfo
     model.to(device)
     model.eval()
     
-    print(f"✓ Model loaded successfully!")
+    print(f"[OK] Model loaded successfully!")
     print(f"  - Trained for {checkpoint['epoch']} epochs")
     print(f"  - Best validation accuracy: {checkpoint['best_acc']:.2f}%")
     print(f"  - Model variant: {args.model}")
@@ -95,7 +114,7 @@ def test_model(
         results: Dictionary containing test metrics
     """
     # Create test dataset and loader
-    test_dataset = CIFAR10Dataset(
+    test_dataset = CIFAR100Dataset(
         data_dir,
         train=False,
         transform=get_transforms(img_size, train=False)
@@ -114,8 +133,8 @@ def test_model(
     # Track metrics
     correct = 0
     total = 0
-    class_correct = [0] * 10
-    class_total = [0] * 10
+    class_correct = [0] * 100
+    class_total = [0] * 100
     all_predictions = []
     all_labels = []
     
@@ -155,10 +174,10 @@ def test_model(
     
     # Calculate per-class accuracy
     class_accuracies = {}
-    for i in range(10):
+    for i in range(100):
         if class_total[i] > 0:
             acc = 100 * class_correct[i] / class_total[i]
-            class_accuracies[CIFAR10_CLASSES[i]] = acc
+            class_accuracies[CIFAR100_CLASSES[i]] = acc
     
     # Print results
     print(f"\n{'='*80}")
@@ -209,7 +228,7 @@ def visualize_predictions(
         save_path: Optional path to save the figure
     """
     # Create test dataset
-    test_dataset = CIFAR10Dataset(
+    test_dataset = CIFAR100Dataset(
         data_dir,
         train=False,
         transform=get_transforms(img_size, train=False)
@@ -251,15 +270,15 @@ def visualize_predictions(
             ax.axis('off')
             
             # Set title with color based on correctness
-            pred_label = CIFAR10_CLASSES[predicted.item()]
-            true_label = CIFAR10_CLASSES[label]
+            pred_label = CIFAR100_CLASSES[predicted.item()]
+            true_label = CIFAR100_CLASSES[label]
             
             if predicted.item() == label:
                 title_color = 'green'
-                title = f'✓ {pred_label}\n({confidence:.1f}%)'
+                title = f'[OK] {pred_label}\n({confidence:.1f}%)'
             else:
                 title_color = 'red'
-                title = f'✗ Pred: {pred_label}\nTrue: {true_label}\n({confidence:.1f}%)'
+                title = f'[X] Pred: {pred_label}\nTrue: {true_label}\n({confidence:.1f}%)'
             
             ax.set_title(title, color=title_color, fontsize=10)
     
@@ -295,16 +314,16 @@ def confusion_matrix(
     plt.figure(figsize=(12, 10))
     sns.heatmap(
         conf_matrix,
-        annot=True,
+        annot=False,  # Too many classes to annotate
         fmt='d',
         cmap='Blues',
-        xticklabels=CIFAR10_CLASSES,
-        yticklabels=CIFAR10_CLASSES,
+        xticklabels=CIFAR100_CLASSES,
+        yticklabels=CIFAR100_CLASSES,
         cbar_kws={'label': 'Count'}
     )
     plt.xlabel('Predicted Label', fontsize=12)
     plt.ylabel('True Label', fontsize=12)
-    plt.title('Confusion Matrix - CIFAR-10 Test Set', fontsize=14, pad=20)
+    plt.title('Confusion Matrix - CIFAR-100 Test Set', fontsize=14, pad=20)
     plt.xticks(rotation=45, ha='right')
     plt.yticks(rotation=0)
     plt.tight_layout()

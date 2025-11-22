@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 from PIL import Image
 
 from model import VisionTransformer
-from train import CIFAR10Dataset, get_transforms
-from utils import load_model, CIFAR10_CLASSES
+from train import CIFAR100Dataset, get_transforms
+from utils import load_model, CIFAR100_CLASSES
 
 
 def get_attention_maps(model, image, device='cpu'):
@@ -111,8 +111,8 @@ def visualize_attention(
     
     # Denormalize image for display
     img_display = image_tensor.cpu().numpy().transpose(1, 2, 0)
-    mean = np.array([0.4914, 0.4822, 0.4465])
-    std = np.array([0.2470, 0.2435, 0.2616])
+    mean = np.array([0.5070751592371323, 0.48654887331495095, 0.4409178433670343])
+    std = np.array([0.2673342858792401, 0.2564384629170883, 0.27615047132568404])
     img_display = img_display * std + mean
     img_display = np.clip(img_display, 0, 1)
     
@@ -129,12 +129,12 @@ def visualize_attention(
     
     # Show original image
     axes[0, 0].imshow(img_display)
-    axes[0, 0].set_title(f'Original Image\nTrue: {CIFAR10_CLASSES[label]}', fontsize=10)
+    axes[0, 0].set_title(f'Original Image\nTrue: {CIFAR100_CLASSES[label]}', fontsize=10)
     axes[0, 0].axis('off')
     
     axes[1, 0].imshow(img_display)
     pred_color = 'green' if pred_idx == label else 'red'
-    axes[1, 0].set_title(f'Prediction\n{CIFAR10_CLASSES[pred_idx]} ({confidence*100:.1f}%)', 
+    axes[1, 0].set_title(f'Prediction\n{CIFAR100_CLASSES[pred_idx]} ({confidence*100:.1f}%)', 
                          fontsize=10, color=pred_color)
     axes[1, 0].axis('off')
     
@@ -213,8 +213,8 @@ def visualize_head_attention(
     
     # Denormalize image
     img_display = image_tensor.cpu().numpy().transpose(1, 2, 0)
-    mean = np.array([0.4914, 0.4822, 0.4465])
-    std = np.array([0.2470, 0.2435, 0.2616])
+    mean = np.array([0.5070751592371323, 0.48654887331495095, 0.4409178433670343])
+    std = np.array([0.2673342858792401, 0.2564384629170883, 0.27615047132568404])
     img_display = img_display * std + mean
     img_display = np.clip(img_display, 0, 1)
     
@@ -241,7 +241,7 @@ def visualize_head_attention(
     for idx in range(num_heads, len(axes)):
         axes[idx].axis('off')
     
-    plt.suptitle(f'Multi-Head Attention - Layer {layer_idx + 1}\nTrue Label: {CIFAR10_CLASSES[label]}', 
+    plt.suptitle(f'Multi-Head Attention - Layer {layer_idx + 1}\nTrue Label: {CIFAR100_CLASSES[label]}', 
                  fontsize=14)
     plt.tight_layout()
     
@@ -255,7 +255,7 @@ def visualize_head_attention(
 if __name__ == '__main__':
     # Configuration
     checkpoint_path = 'checkpoints/best_model.pth'
-    data_dir = '../cifar-10-python/cifar-10-batches-py'
+    data_dir = '../cifar-100-python/cifar-100-python'
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     print(f"Using device: {device}")
@@ -264,7 +264,7 @@ if __name__ == '__main__':
     model, checkpoint = load_model(checkpoint_path, device=device)
     
     # Load test dataset
-    test_dataset = CIFAR10Dataset(
+    test_dataset = CIFAR100Dataset(
         data_dir,
         train=False,
         transform=get_transforms(224, train=False)
@@ -277,7 +277,7 @@ if __name__ == '__main__':
         idx = np.random.randint(len(test_dataset))
         image, label = test_dataset[idx]
         
-        print(f"\nExample {i+1}: {CIFAR10_CLASSES[label]}")
+        print(f"\nExample {i+1}: {CIFAR100_CLASSES[label]}")
         
         # Visualize layer-wise attention
         visualize_attention(
@@ -296,5 +296,5 @@ if __name__ == '__main__':
             save_path=f'attention_heads_example_{i+1}.png'
         )
     
-    print("\n✓ Attention visualizations completed!")
+    print("\n[OK] Attention visualizations completed!")
 
