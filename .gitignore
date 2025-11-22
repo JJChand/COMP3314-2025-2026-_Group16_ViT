@@ -31,9 +31,9 @@ venv/
 # 3rd party data and models
 cifar-10-python/
 cifar-100-python/
-/cifar-10
-/cifar-100
-102flowers.tgz
+cifar-10/
+cifar-100/
+*.tgz
 *.pth
 *.tar
 
@@ -48,3 +48,4 @@ logs/
 results/
 
 # TensorBoard
+/cifar-10
